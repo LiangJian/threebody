@@ -4,6 +4,10 @@ from scipy.integrate import solve_ivp
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation 
 
+# TODO
+# 1, catch impact event in the solver
+# 2， 3-D case
+# 3, collect stable initial conditions
 
 @numba.jit
 def threebody2d(t, y, m0, m1, m2):
@@ -43,9 +47,11 @@ vx = 0.466203685
 vy = 0.43236573
 y0 = [rx, vx, ry, vy, -rx, vx, -ry, vy, 0.0, -2*vx, 0.0, -2*vy]
 sol = solve_ivp(threebody2d, t_span=(0, 63), y0=y0, args=(1.0,1.0,1.0), rtol=1e-10, atol=1e-10)
-print(sol.status)
 
-print(sol.y.shape)
+if sol.status != 0:
+    print(sol.message)
+    exit(1)
+
 r0_x = sol.y[0, :] 
 r0_y = sol.y[2, :] 
 r1_x = sol.y[4, :] 
@@ -54,18 +60,18 @@ r2_x = sol.y[8, :]
 r2_y = sol.y[10, :]
 
 N = 500
+assert N <= sol.y.shape[1]
+
 plt.plot(r0_x[:N], r0_y[:N])
 plt.plot(r1_x[:N], r1_y[:N])
 plt.plot(r2_x[:N], r2_y[:N])
 plt.show()
 
-
 fig = plt.figure()
 ax1 = plt.axes(xlim=(-1.1, 1.1), ylim=(-0.5, 0.5))
-
 lines = []
 for index in range(3):
-    lobj = ax1.plot([],[],alpha=0.5,color='C%d'%index)[0]
+    lobj = ax1.plot([],[],alpha=1.0,color='C%d'%index)[0]
     lines.append(lobj)
 for index in range(3):
     lobj = ax1.plot([],[],markersize=8,marker='o',color='C%d'%index,alpha=1)[0]
@@ -96,20 +102,14 @@ plt.show()
 fig = plt.figure()
 ax1 = plt.axes(xlim=(-1.1, 1.1), ylim=(-0.5, 0.5))
 N2 = 40
-
+assert N2 < N
 lines = []
 for index in range(3):
-    lobj = ax1.plot([],[],alpha=0.5,color='C%d'%index)[0]
+    lobj = ax1.plot([],[],alpha=1.0,color='C%d'%index)[0]
     lines.append(lobj)
 for index in range(3):
     lobj = ax1.plot([],[],markersize=8,marker='o',color='C%d'%index,alpha=1)[0]
     lines.append(lobj)
-
-
-def init():
-    for line in lines:
-        line.set_data([],[])
-    return lines
 
 
 def animate(i):
@@ -130,5 +130,4 @@ def animate(i):
 
 
 anim = animation.FuncAnimation(fig, animate, init_func=init,frames=N, interval=5/N*1000, blit=True, repeat=False)
-
 plt.show()
