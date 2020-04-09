@@ -6,8 +6,8 @@ import matplotlib.animation as animation
 
 # TODO
 # 1, catch impact event in the solver
-# 2， 3-D case
-# 3, collect stable initial conditions
+# 2，3-D case
+
 
 @numba.jit
 def threebody2d(t, y, m0, m1, m2):
@@ -40,13 +40,13 @@ def threebody2d(t, y, m0, m1, m2):
     return dydt
 
 
-y0 = [1.0, 0.0, -1.0, 0.0, 1.0, 0.0, 3.0, 0.0, -2.0, 0.0, -1.0, 0.0]
 rx = 0.9700436
 ry = -0.24308753
 vx = 0.466203685
 vy = 0.43236573
+
 y0 = [rx, vx, ry, vy, -rx, vx, -ry, vy, 0.0, -2*vx, 0.0, -2*vy]
-sol = solve_ivp(threebody2d, t_span=(0, 63), y0=y0, args=(1.0,1.0,1.0), rtol=1e-10, atol=1e-10)
+sol = solve_ivp(threebody2d, t_span=(0, 60), y0=y0, args=(1.0,1.0,1.0), rtol=1e-10, atol=1e-10)
 
 if sol.status != 0:
     print(sol.message)
@@ -59,12 +59,29 @@ r1_y = sol.y[6, :]
 r2_x = sol.y[8, :] 
 r2_y = sol.y[10, :]
 
-N = 500
-assert N <= sol.y.shape[1]
 
-plt.plot(r0_x[:N], r0_y[:N])
-plt.plot(r1_x[:N], r1_y[:N])
-plt.plot(r2_x[:N], r2_y[:N])
+def period_finding(sol_):
+    for it in range(10, sol_.t.size):
+        judge = True
+        for iv in range(sol_.y.shape[0]):
+            judge = judge and abs(sol_.y[iv, it] - sol_.y[iv, 0])**2**0.5 < 1e-3
+        if judge:
+            return it
+    return 0
+
+
+period = period_finding(sol)
+assert period > 0
+print('period found:', period, 'steps, T=', sol.t[period])
+
+N = 40
+t_max = sol.t[period + 1]
+t_play = 5  # s
+di = 1  # the delta i
+
+plt.plot(r0_x[:period+1], r0_y[:period+1])
+plt.plot(r1_x[:period+1], r1_y[:period+1])
+plt.plot(r2_x[:period+1], r2_y[:period+1])
 plt.show()
 
 fig = plt.figure()
@@ -84,25 +101,24 @@ def init():
     return lines
 
 
-def animate(i):
+def animate1(i):
 
-    lines[0].set_data(r0_x[:i+1], r0_y[:i+1])
-    lines[1].set_data(r1_x[:i+1], r1_y[:i+1])
-    lines[2].set_data(r2_x[:i+1], r2_y[:i+1])
-    lines[3].set_data(r0_x[i], r0_y[i])
-    lines[4].set_data(r1_x[i], r1_y[i])
-    lines[5].set_data(r2_x[i], r2_y[i])
+    lines[0].set_data(r0_x[sol.t<=i], r0_y[sol.t<=i])
+    lines[1].set_data(r1_x[sol.t<=i], r1_y[sol.t<=i])
+    lines[2].set_data(r2_x[sol.t<=i], r2_y[sol.t<=i])
+    lines[3].set_data(r0_x[sol.t<=i][-1], r0_y[sol.t<=i][-1])
+    lines[4].set_data(r1_x[sol.t<=i][-1], r1_y[sol.t<=i][-1])
+    lines[5].set_data(r2_x[sol.t<=i][-1], r2_y[sol.t<=i][-1])
 
     return lines
 
 
-anim = animation.FuncAnimation(fig, animate, init_func=init,frames=N, interval=5/N*1000, blit=True, repeat=False)
-plt.show()
+anim = animation.FuncAnimation(fig, animate1, init_func=init,frames=np.linspace(0,t_max,N), interval=t_play*1000/N, blit=True, repeat=True)
+anim.save('float-8_1.gif', writer='imagemagick',fps=N//3,dpi=80)
+# plt.show()
 
 fig = plt.figure()
 ax1 = plt.axes(xlim=(-1.1, 1.1), ylim=(-0.5, 0.5))
-N2 = 40
-assert N2 < N
 lines = []
 for index in range(3):
     lobj = ax1.plot([],[],alpha=1.0,color='C%d'%index)[0]
@@ -111,23 +127,17 @@ for index in range(3):
     lobj = ax1.plot([],[],markersize=8,marker='o',color='C%d'%index,alpha=1)[0]
     lines.append(lobj)
 
-
-def animate(i):
-
-    if i >= N2:
-        lines[0].set_data(r0_x[i-N2:i+1], r0_y[i-N2:i+1])
-        lines[1].set_data(r1_x[i-N2:i+1], r1_y[i-N2:i+1])
-        lines[2].set_data(r2_x[i-N2:i+1], r2_y[i-N2:i+1])
-    else:
-        lines[0].set_data(r0_x[:i+1], r0_y[:i+1])
-        lines[1].set_data(r1_x[:i+1], r1_y[:i+1])
-        lines[2].set_data(r2_x[:i+1], r2_y[:i+1])
-    lines[3].set_data(r0_x[i], r0_y[i])
-    lines[4].set_data(r1_x[i], r1_y[i])
-    lines[5].set_data(r2_x[i], r2_y[i])
+def animate2(i):
+    lines[0].set_data(r0_x[np.logical_and(i-di<sol.t,sol.t<=i)], r0_y[np.logical_and(i-di<sol.t,sol.t<=i)])
+    lines[1].set_data(r1_x[np.logical_and(i-di<sol.t,sol.t<=i)], r1_y[np.logical_and(i-di<sol.t,sol.t<=i)])
+    lines[2].set_data(r2_x[np.logical_and(i-di<sol.t,sol.t<=i)], r2_y[np.logical_and(i-di<sol.t,sol.t<=i)])
+    lines[3].set_data(r0_x[sol.t<=i][-1], r0_y[sol.t<=i][-1])
+    lines[4].set_data(r1_x[sol.t<=i][-1], r1_y[sol.t<=i][-1])
+    lines[5].set_data(r2_x[sol.t<=i][-1], r2_y[sol.t<=i][-1])
 
     return lines
 
 
-anim = animation.FuncAnimation(fig, animate, init_func=init,frames=N, interval=5/N*1000, blit=True, repeat=False)
-plt.show()
+anim = animation.FuncAnimation(fig, animate2, init_func=init,frames=np.linspace(0,t_max,N), interval=t_play*1000/N, blit=True, repeat=True)
+anim.save('float-8_2.gif', writer='imagemagick',fps=N//3,dpi=80)
+# plt.show()
